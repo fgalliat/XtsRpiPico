@@ -4,6 +4,8 @@
 
  - Various projects on Rpi PICO (microPython)
 
+![console](./pictures/consoleBox.jpg)
+
  - **(took from web)**
 	 - ili9341.py : ILI9341 Screen lib
 	 - sdcard.py : SdCard lib
