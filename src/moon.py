@@ -46,6 +46,62 @@ F_DOWN  = const(3)
 I_WEAPON = const(1)
 I_POTION = const(2)
 
+SPRITE_SIZE = const(16)
+
+_mapRW = 30
+_mapRH = 10
+_mapW = 15
+_mapH = 8
+
+
+class Camera:
+    def __init__(self, _mapW=_mapW, _mapH=_mapH, _mapRW=_mapRW, _mapRH=_mapRH):
+        self.x = 0
+        self.y = 0
+    def set(self, xx,yy):
+        miW = _mapW/2
+        miH = _mapH/2
+        oldX = int(self.x)
+        oldY = int(self.y)
+        self.x = xx - miW
+        self.y = yy - miH
+        ret = True
+        if ( self.x < 0 ):
+            self.x = 0
+        if ( self.y < 0 ):
+            self.y = 0
+        if ( self.x > _mapRW - _mapW ):
+            self.x = _mapRW - _mapW
+        if ( self.y > _mapRH - _mapH  ):
+            self.y = _mapRH - _mapH
+        ret = not ( oldX == int(self.x) and oldY == int(self.y) )
+        return ret
+
+cam = Camera()
+
+# === Map ===
+
+map  = "111111111111111111111111111111"
+map += "100010000000000100010000000001"
+map += "100010000001001000010000000001"
+map += "100000000100000100010000000001"
+map += "100010000000001000000000000001"
+map += "100010000000000000000000000001"
+map += "100010100001000100010000000001"
+map += "100010100001000100010000000001"
+map += "100010100001000100010000000001"
+map += "111111111111111111111111111111"
+
+def buildMap(str):
+    result = []
+    for i in range(len(str)):
+        result.append( int( str[i] ) )
+    return result
+
+_map = bytes( buildMap( map ) )
+
+
+
 # ===== Hardware =====
 seed(ticks_cpu())
 
@@ -70,6 +126,9 @@ display.clear()
 
 # ===== Software =====
 
+def fPart(x):
+    return ( x - int(x) )
+
 def openSprite(path, offset, width, height):
     with open(path, "rb") as f:
       f.seek( offset )
@@ -87,9 +146,8 @@ font = fb.load_uFont('fonts/mono58.bin')
 #  - tiles is 16x112
 # display.draw_image('/sd/images/sumo.raw', 130, 0, 16, 128)
 
-SPRITE_SIZE = const(16)
-
 def spriteOffset(spriteNum):
+    # * 2 because u16
     return ( SPRITE_SIZE * SPRITE_SIZE * spriteNum * 2 )
 
 led.value(1)
@@ -112,111 +170,86 @@ def shakeScreen():
         fb.render(x+4,y+4)
         display.fill_rectangle(x, y+128, 240+4, 4, BLACK)
         display.fill_rectangle(x+240, y, 4, 128+4, BLACK)
-        
-        #display.fill_rectangle(0, 0, 250, 20, BLACK)
-        #fb.render(4,4)
     end = ticks_us()
     print('Total time: {:4d} to shake screen'.format(end - start))
 
-def drawTile(xb, yb, tileNum):
-    fb.drawSprite( tiles, spriteOffset(tileNum), int(xb*SPRITE_SIZE), int(yb*SPRITE_SIZE), SPRITE_SIZE, SPRITE_SIZE )
+def getGround(x,y):
+    x = int(x)
+    y = int(y)
+    if ( x < 0 or y < 0 or y >= _mapRH or x >= _mapRW ):
+        return 99
+    return _map[ (_mapRW*y)+x ]
+
+def renderMap(_mapW=_mapW, _mapH=_mapH):
+    for j in range(_mapH):
+        for i in range(_mapW):
+            fb.drawSprite( tiles, spriteOffset(getGround(cam.x+i,cam.y+j)), i*SPRITE_SIZE, j*SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE )
+
+def renderMapWin(x, y, x2, y2, _mapW=_mapW, _mapH=_mapH, cam=cam, fb=fb):
+    x -= cam.x
+    y -= cam.y
+    x2 -= cam.x
+    y2 -= cam.y
+    for j in range(_mapH):
+        if j < y:
+            continue
+        if j > y2:
+            continue
+        for i in range(_mapW):
+            if i < x:
+                continue
+            if i > x2:
+                continue
+            fb.drawSprite( tiles, spriteOffset(getGround(cam.x+i,cam.y+j)), i*SPRITE_SIZE, j*SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE )
 
 def drawPlayer(xb, yb, faceNum):
     xb -= 0.5
     yb -= 0.5
-    fb.drawSprite( sumo, spriteOffset(faceNum * 2), int(xb*SPRITE_SIZE), int(yb*SPRITE_SIZE), SPRITE_SIZE, SPRITE_SIZE )
+    xb -= cam.x
+    yb -= cam.y
+    xx = int(xb * SPRITE_SIZE)
+    yy = int(yb * SPRITE_SIZE)
+    if ( xx + SPRITE_SIZE <= fb.width and yy + SPRITE_SIZE <= fb.height ):
+        fb.drawSprite( sumo, spriteOffset(faceNum * 2), xx, yy, SPRITE_SIZE, SPRITE_SIZE, WHITE )
 
 def drawEnemy(xb, yb, faceNum):
     xb -= 0.5
     yb -= 0.5
-    fb.drawSprite( cars, spriteOffset(faceNum), int(xb*SPRITE_SIZE), int(yb*SPRITE_SIZE), SPRITE_SIZE, SPRITE_SIZE )
-
-
-def fPart(x):
-    return ( x - int(x) )
+    xb -= cam.x
+    yb -= cam.y
+    xx = int(xb * SPRITE_SIZE)
+    yy = int(yb * SPRITE_SIZE)
+    if ( xx + SPRITE_SIZE <= fb.width and yy + SPRITE_SIZE <= fb.height ):
+        fb.drawSprite( cars, spriteOffset(faceNum), xx, yy, SPRITE_SIZE, SPRITE_SIZE, WHITE )
 
 def renderPlayer(xbf, ybf, faceNum):
-    #if ( fPart(xbf) == 0 and fPart(ybf) == 0 ):
-    #    drawTile(xbf, ybf, getGround( xbf, ybf ) )
-    #else:
-    if True:
-        left = int(xbf-.5)
-        top = int(ybf-.5)
-        """
-        # bottom face
-        if ( faceNum == F_DOWN ):
-            top -= 1
-        # up face
-        if ( faceNum == F_UP ):
-            left += 1
-        # right face
-        if ( faceNum == F_RIGHT ):
-            left -= 1
-        """
-        right = left+1
-        bottom = top+1
-        
-
-        if ( left < 0 ) :
-            left = 0
-        if ( top < 0 ) :
-            top = 0
-        drawTile(left, top, getGround( left, top ) )
-        drawTile(right, top, getGround( right, top ) )
-        drawTile(left, bottom, getGround( left, bottom ) )
-        drawTile(right, bottom, getGround( right, bottom ) )
+    left = int(xbf-1)
+    top = int(ybf-1)
+    right = left+2
+    bottom = top+2
+    if ( left < 0 ) :
+        left = 0
+    if ( top < 0 ) :
+        top = 0
+    renderMapWin(left, top, right, bottom)
     drawPlayer(xbf, ybf, faceNum)
 
 
 def renderEnemy(xbf, ybf, faceNum):
-    if True:
-        left = int(xbf-.5)
-        top = int(ybf-.5)
-        right = left+1
-        bottom = top+1
-
+    left = int(xbf-1)
+    top = int(ybf-1)
+    if (top >= cam.y and left >= cam.x
+        and top <= cam.y+_mapH and left <= cam.x+_mapW):
+        right = left+2
+        bottom = top+2
         if ( left < 0 ) :
             left = 0
         if ( top < 0 ) :
             top = 0
-        drawTile(left, top, getGround( left, top ) )
-        drawTile(right, top, getGround( right, top ) )
-        drawTile(left, bottom, getGround( left, bottom ) )
-        drawTile(right, bottom, getGround( right, bottom ) )
-    drawEnemy(xbf, ybf, faceNum)
-
-
-#       123456789012345
-map  = "111111111111111"
-map += "100010000000001"
-map += "100010000001001"
-map += "100010000100001"
-map += "100010000000001"
-map += "100010000000001"
-map += "100010100001001"
-map += "111111111111111"
-
-def buildMap(str):
-    result = []
-    for i in range(len(str)):
-        result.append( int( str[i] ) )
-    return result
-
-
-_mapW = 15
-_mapH = 8
-_map = buildMap( map )
-
-def getGround(x,y):
-    return _map[ (_mapW*y)+x ]
-
-def renderMap():
-    for j in range(8):
-        for i in range(15):
-            fb.drawSprite( tiles, spriteOffset(getGround(i,j)), i*SPRITE_SIZE, j*SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE )
+        renderMapWin(left, top, right, bottom)
+        drawEnemy(xbf, ybf, faceNum)
 
 # ==================================
-
 # make player spining
 #for i in range (4):
 #    drawTile( 8, 5, 0 )
@@ -225,20 +258,6 @@ def renderMap():
 #    sleep_us(60000)
 
 sDirty = False
-
-
-
-"""
-def toBin(a):
-    bnr = bin(a).replace('0b','')
-    #x = bnr[::-1]
-    x=''.join(reversed(bnr))
-    while len(x) < 8:
-        x += '0'
-    #bnr = x[::-1]
-    bnr=''.join(reversed(x))
-    return bnr
-"""
 
 def menu(x, y, w, h, items):
     tlen = len(items)
@@ -354,13 +373,38 @@ class Enemy:
         self.x = x
         self.y = y
         self.face = F_RIGHT
+        self.speed = 0.02
     def doesMeetPlayer(self, player):
         return ( abs( self.x - player.x ) < 0.4 and abs( self.y - player.y ) < 0.4 )
+
+    def doesCollidBck(self):
+        return getGround( int(self.x), int(self.y) ) != 0
+
     def render(self):
         renderEnemy(self.x, self.y, self.face)
+    
+    def move(self):
+        fc = self.face
+        if ( fc == F_RIGHT and self.x < _mapW-0.5 ):
+            self.x += self.speed
+        elif ( fc == F_LEFT and self.x > 0.5 ):
+            self.x -= self.speed
+        elif ( fc == F_UP and self.y > 0.5 ):
+            self.y -= self.speed
+        elif ( fc == F_DOWN and self.y < _mapH - 0.5 ):
+            self.y += self.speed
+        
+        moved = True
+        if ( self.doesCollidBck() ):
+            self.face += int( random() * 4 )
+            self.face %= 4
+            moved = False
+
+        # moved = not ( xx == int(self.x) and yy == int(self.y) )
+        return moved
 
 class Player:
-    def __init__(self, x=5.2, y=5.2):
+    def __init__(self, x=(_mapW/2), y=(_mapH/2)):
         self.x = x
         self.y = y
         self.face = 2
@@ -381,23 +425,37 @@ class Player:
     def _go(self, deltaX, deltaY, face):
         xx = self.x
         yy = self.y
+        oldX = self.x
+        oldY = self.y
         self.face = face
         xx += deltaX
         yy += deltaY
+        dirt = False
         if ( getGround( int(xx), int(yy) ) != 0 ):
             buzzer.beep(440, 50)
         else:
             self.x = xx
             self.y = yy
+            newX = xx
+            newY = yy
+            if ( oldX > newX ):
+                dirt = cam.set(xx,yy)
+            elif ( oldX < newX ):
+                dirt = cam.set(xx,yy)
+            if ( oldY > newY ):
+                dirt = cam.set(xx,yy)
+            elif ( oldY < newY ):
+                dirt = cam.set(xx,yy)
+        return dirt
 
     def goLeft(self):
-        self._go( -0.2, 0, F_LEFT)
+        return self._go( -0.2, 0, F_LEFT)
     def goRight(self):
-        self._go(  0.2, 0, F_RIGHT)
+        return self._go(  0.2, 0, F_RIGHT)
     def goUp(self):
-        self._go( 0, -0.2, F_UP)
+        return self._go( 0, -0.2, F_UP)
     def goDown(self):
-        self._go( 0,  0.2, F_DOWN)
+        return self._go( 0,  0.2, F_DOWN)
     
     def _dispInventory(self):
         fb.fillRect(20, 20, 240-40, 128-40, LGRAY)
@@ -463,7 +521,6 @@ class Player:
                 tlen = len(self.inventory)
                 self._dispInventory()
                 dirt = True
-        
         fb.render()
         
     def reindexInventory(self):
@@ -488,6 +545,7 @@ player.addToInventory(healP)
 player.addToInventory(dagger)
 
 enemies = [ Enemy(8, 4) , Enemy(12, 4) ]
+# enemies = [  ]
 
 # ===============================
 
@@ -502,20 +560,21 @@ fb.render()
 
 def gameLoop(sDirty=sDirty, player=player, enemies=enemies):
     sDirty = True
+    sRenderMap = False
     while( True ):
         joy.poll()
         
-        if ( joy.x < -0.5 and player.x > 0.2 ):
-            player.goLeft()
+        if ( joy.x < -0.5 ):
+            sRenderMap = player.goLeft()
             sDirty = True
-        if ( joy.y < -0.5 and player.y > 0.2 ):
-            player.goUp()
+        if ( joy.y < -0.5 ):
+            sRenderMap = player.goUp()
             sDirty = True
-        if ( joy.x > 0.5 and player.x < 13.8 ):
-            player.goRight()
+        if ( joy.x > 0.5 ):
+            sRenderMap = player.goRight()
             sDirty = True
-        if ( joy.y > 0.5 and player.y < 6.8 ):
-            player.goDown()
+        if ( joy.y > 0.5 ):
+            sRenderMap = player.goDown()
             sDirty = True
 
         ejectLoop = False
@@ -523,7 +582,6 @@ def gameLoop(sDirty=sDirty, player=player, enemies=enemies):
             if ( ejectLoop ):
                 break
             enem = enemies[i]
-            enem.render()
             if ( enem.doesMeetPlayer(player) ):
                 fight(enem)
                 if ( enem.fighter.isDead() ):
@@ -536,11 +594,17 @@ def gameLoop(sDirty=sDirty, player=player, enemies=enemies):
                 fb.render()
                 sleep(0.2)
                 joy.poll()
+            if (enem.move()):
+                enem.render()
+                sDirty = True
                 
         if ( player.fighter.isDead() ):
             break
 
         if ( sDirty == True ):
+            if (sRenderMap):
+                renderMap()
+                sRenderMap = False
             player.render()
             fb.render()
             sDirty = False
@@ -550,8 +614,7 @@ def gameLoop(sDirty=sDirty, player=player, enemies=enemies):
         if ( joy.b == True ):
             sleep(0.2)
             player.dispInventory()
-            renderMap()
-            player.render()
+            sRenderMap = True
             sDirty = True
             
         
@@ -560,16 +623,7 @@ def gameLoop(sDirty=sDirty, player=player, enemies=enemies):
     fb.render()
 
 
-def printPlayerStat(player):
-    print('('+ player.name +') HP: '+str(player.fighter.hp))
-
-def printEnemyStat(enemy):
-    print('('+ enemy.name +') HP: '+str(enemy.fighter.hp))
-
 def fight(enem0):
-    #enem0.render()
-    #fb.render()
-    
     fItems = ['Attack', 'Spell', 'Item', 'Runaway']
     
     fb.fillRect(20, 20, 240-40, 128-40, LGRAY)
@@ -580,10 +634,6 @@ def fight(enem0):
     fb.drawString( 22+2, 22+8, ' Vs '+enem0.name+'  [ HP: '+ str(enem0.fighter.hp) +' ]', font, BLACK, LGRAY )
 
     fb.render()
-
-    
-    printPlayerStat(player)
-    printEnemyStat(enem0)
 
     while not ( player.fighter.isDead() or enem0.fighter.isDead() ):
         choice = menu(160, 70, 11*6, -1, fItems )
@@ -612,8 +662,6 @@ def fight(enem0):
                     print(' Miss !')
                     fb.drawString( 22+2, 22+32+24, ' Miss !', font, BLACK, LGRAY )
 
-            #printPlayerStat(player)
-            #printEnemyStat(enem0)
             fb.drawString( 22+2, 22, '-= '+player.name+' Battle =-  [ HP: '+ str(player.fighter.hp) +' ]   ', font, BLACK, LGRAY )
             fb.drawString( 22+2, 22+8, ' Vs '+enem0.name+'  [ HP: '+ str(enem0.fighter.hp) +' ]   ', font, BLACK, LGRAY )
             fb.render()
@@ -623,9 +671,10 @@ def fight(enem0):
     else:
         print( 'Opponent\'s dead ..' )
 
-if not True:
-    enem0 = enemies[0]
-    fight(enem0)
-
 if True :
-    gameLoop()
+    try:
+        gameLoop()
+    except KeyboardInterrupt:
+        buzzer.noTone()
+        display.cleanup()
+        print('Good Bye')
