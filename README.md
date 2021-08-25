@@ -4,7 +4,8 @@
 
  - Various projects on Rpi PICO (microPython)
 
-![console](./pictures/consoleBox.jpg)
+|![console](./pictures/consoleBox.jpg) |![wiring](./pictures/wiring.png)  |
+|--------------------------------------|----------------------------------|
 
  - **(took from web)**
 	 - ili9341.py : ILI9341 Screen lib
